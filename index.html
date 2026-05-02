@@ -211,6 +211,7 @@ footer { background: var(--navy); color: rgba(255,255,255,0.5); padding: 4rem; }
   nav { padding: 0 1.5rem; }
   .nav-links { display: none; }
   .section, #contact-sec, #story, .owner-grid { grid-template-columns: 1fr; padding: 5rem 1.5rem; }
+  .gallery-content.active { grid-template-columns: 1fr; }
   #stats, .gallery-categories { flex-direction: column; }
   .f-top { grid-template-columns: 1fr; }
 }
@@ -628,7 +629,8 @@ footer { background: var(--navy); color: rgba(255,255,255,0.5); padding: 4rem; }
     <div id="admin-gallery-food" style="margin-top:10px; display:flex; flex-direction:column; gap:5px;"></div>
   </div>
 
-  <button onclick="saveChanges()" style="width:100%; padding:12px; background:var(--navy); color:#fff; border:none; margin-top:1rem; margin-bottom: 2rem; cursor:pointer; text-transform:uppercase; font-weight:bold; letter-spacing:1px;">Save Permanent Settings</button>
+  <button onclick="saveChanges()" style="width:100%; padding:12px; background:var(--navy); color:#fff; border:none; margin-top:1rem; cursor:pointer; text-transform:uppercase; font-weight:bold; letter-spacing:1px;">Save Settings Locally</button>
+  <button onclick="downloadHTML()" style="width:100%; padding:12px; background:#28a745; color:#fff; border:none; margin-top:10px; margin-bottom: 2rem; cursor:pointer; text-transform:uppercase; font-weight:bold; letter-spacing:1px;">Download to Publish on GitHub</button>
 </div>
 
 <div id="loader">
@@ -816,6 +818,19 @@ let galleryData = {
 window.onload = () => { 
   setTimeout(() => { document.getElementById('loader').classList.add('gone'); }, 1000); 
   
+  // If this is a published downloaded file, skip localStorage override
+  if (document.body.getAttribute('data-published') === 'true') {
+     const embeddedGallery = document.body.getAttribute('data-gallery');
+     if (embeddedGallery) {
+         galleryData = JSON.parse(embeddedGallery);
+     }
+     // Don't call updateLive() here so we preserve the hardcoded DOM styles!
+     renderGalleryAdmin();
+     renderGalleryFront();
+     isPageLoaded = true; 
+     return;
+  }
+
   // Initialize Checkboxes Default State handling
   const showHeroBg = localStorage.getItem('nchs_show_hero_bg');
   if(showHeroBg !== null) document.getElementById('edit-show-hero-bg').checked = (showHeroBg === 'true');
@@ -1267,6 +1282,50 @@ function saveChanges() {
 
   alert('Settings saved permanently in your browser!');
   toggleEdit();
+}
+
+function downloadHTML() {
+  saveChanges(); // Make sure latest changes are in localStorage
+  
+  // 1. Serialize all Admin Panel inputs into HTML attributes
+  document.querySelectorAll('#edit-panel input, #edit-panel textarea').forEach(input => {
+     if (input.type === 'checkbox') {
+        if (input.checked) input.setAttribute('checked', 'checked');
+        else input.removeAttribute('checked');
+     } else if (input.tagName === 'TEXTAREA') {
+        input.innerHTML = input.value;
+     } else {
+        input.setAttribute('value', input.value);
+     }
+  });
+
+  // 2. Embed the dynamic gallery data directly into the body tag
+  document.body.setAttribute('data-gallery', JSON.stringify(galleryData));
+  
+  // 3. Mark this file as a published file so it ignores empty mobile localStorage
+  document.body.setAttribute('data-published', 'true');
+
+  // Clone the entire document
+  const clonedDoc = document.documentElement.cloneNode(true);
+  
+  // Ensure the admin panel is closed in the downloaded file
+  const panel = clonedDoc.querySelector('#edit-panel');
+  if(panel) panel.classList.remove('open');
+  
+  // Get the HTML string
+  const htmlContent = "<!DOCTYPE html>\n" + clonedDoc.outerHTML;
+  
+  // Create a Blob and trigger download
+  const blob = new Blob([htmlContent], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'index.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  
+  // Clean up the working DOM attributes so local editing continues normally
+  document.body.removeAttribute('data-published');
 }
 
 /* ── REVEAL & COUNTERS ── */
